@@ -1,6 +1,9 @@
 package main
 
 import (
+	"database/sql"
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,6 +32,21 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Get the video first to check authorization to save compute on parsing the uploaded data
+	video, err := cfg.db.GetVideo(videoID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			respondWithError(w, http.StatusNotFound, "Video not found", err)
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong", err)
+		return
+	}
+	if userID != video.UserID {
+		respondWithError(w, http.StatusForbidden, "Forbidden", nil)
+		return
+	}
+
 	fmt.Println("uploading thumbnail for video", videoID, "by user", userID)
 
 	// Bit shifting to get memory in bytes.
@@ -50,7 +68,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	defer file.Close()
 
 	mediaType := headers.Header.Get("Content-Type")
-	if mediaType == "" { // ensures the client specified a content type for the file, we want this for our thumbnail struct
+	if mediaType == "" { // Ensures the client specified a content type for the file, we need this for our imageDataURL
 		respondWithError(w, http.StatusBadRequest, "Invalid media type", nil)
 		return
 	}
@@ -61,31 +79,13 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	video, err := cfg.db.GetVideo(videoID)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Something went wrong", err)
-		return
-	}
-
-	if userID != video.UserID {
-		respondWithError(w, http.StatusUnauthorized, "Unauthorized Request", nil)
-		return
-	}
-
-	tn := thumbnail{
-		data:      data,
-		mediaType: mediaType,
-	}
-	videoThumbnails[video.ID] = tn
-
-	// Update video metadata with a new thumbnail URL.
-	newThumbnailURL := fmt.Sprintf("http://localhost:%v/api/thumbnails/%v", cfg.port, videoID)
-	video.ThumbnailURL = &newThumbnailURL // not every video has a thumbnail, therefore can be NULL in db, strings nil value is "" but that could count as a URL, so we use *string which can definitely be nil.
+	imageAsBase64String := base64.StdEncoding.EncodeToString(data) // Encoding the image as a base64 string allows us to store it in the database
+	imageDataURL := fmt.Sprintf("data:%s;base64,%s", mediaType, imageAsBase64String)
+	video.ThumbnailURL = &imageDataURL // Not every video has a thumbnail, therefore can be NULL in db, strings nil value is "" but that could count as a URL, so we use *string which can definitely be nil.
 
 	// Update the video record in the database.
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
-		delete(videoThumbnails, videoID) // we want to remove the thumbnail from our map if the database doesn't update
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong", err)
 		return
 	}
