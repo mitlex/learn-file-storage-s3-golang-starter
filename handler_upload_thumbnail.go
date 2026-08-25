@@ -90,5 +90,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// The browser decodes the Base64 image data in the data URL and renders it directly.
+	// This replaces the separate GET request that previously fetched the thumbnail.
 	respondWithJSON(w, http.StatusOK, video)
 }
