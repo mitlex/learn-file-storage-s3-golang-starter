@@ -29,6 +29,13 @@ type thumbnail struct {
 	mediaType string
 }
 
+// videoThumbnails is an in-memory stand-in for a real file storage system (disk, S3, etc.).
+// It maps a video's ID to its raw thumbnail bytes and media type. The database only stores
+// a URL pointing here (via video.ThumbnailURL) — this map is what actually serves the bytes.
+//
+// The URL itself is just a string; the connection to this map is made by the router.
+// The URL embeds the video's ID (e.g. /api/thumbnails/{videoID}), and handlerThumbnailGet
+// extracts that ID from the path and uses it as the key to look up bytes here.
 var videoThumbnails = map[uuid.UUID]thumbnail{}
 
 func main() {
