@@ -2,11 +2,13 @@ package main
 
 import (
 	"database/sql"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -67,21 +69,37 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	defer file.Close()
 
-	mediaType := headers.Header.Get("Content-Type")
-	if mediaType == "" { // Ensures the client specified a content type for the file, we need this for our imageDataURL
-		respondWithError(w, http.StatusBadRequest, "Invalid media type", nil)
+	cTypeVal := headers.Header.Get("Content-Type")
+	if cTypeVal == "" { // Ensures the client specified a content type for the file, we need this for our new file and thumbnail URL
+		respondWithError(w, http.StatusBadRequest, "Invalid content type", nil)
 		return
 	}
 
-	data, err := io.ReadAll(file)
+	// Split content type value into parts so we can grab the file extension i.e. image/png -> png
+	cTypeValParts := strings.Split(cTypeVal, "/")
+	if len(cTypeValParts) != 2 {
+		respondWithError(w, http.StatusBadRequest, "Invalid content type", nil)
+		return
+	}
+	fileExtension := cTypeValParts[1]
+
+	fileName := fmt.Sprintf("%s.%s", video.ID, fileExtension)
+	fileOnDiskPath := filepath.Join(cfg.assetsRoot, fileName)
+	fileOnDisk, err := os.Create(fileOnDiskPath)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Error reading file", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong", err)
+		return
+	}
+	defer fileOnDisk.Close()
+
+	_, err = io.Copy(fileOnDisk, file)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong", err)
 		return
 	}
 
-	imageAsBase64String := base64.StdEncoding.EncodeToString(data) // Encoding the image as a base64 string allows us to store it in the database
-	imageDataURL := fmt.Sprintf("data:%s;base64,%s", mediaType, imageAsBase64String)
-	video.ThumbnailURL = &imageDataURL // Not every video has a thumbnail, therefore can be NULL in db, strings nil value is "" but that could count as a URL, so we use *string which can definitely be nil.
+	tnURL := fmt.Sprintf("http://localhost:%s/assets/%s", cfg.port, fileName)
+	video.ThumbnailURL = &tnURL // Not every video has a thumbnail, therefore can be NULL in db, strings nil value is "" but that could count as a URL, so we use *string which can definitely be nil.
 
 	// Update the video record in the database.
 	err = cfg.db.UpdateVideo(video)
@@ -90,7 +108,9 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// The browser decodes the Base64 image data in the data URL and renders it directly.
-	// This replaces the separate GET request that previously fetched the thumbnail.
+	// 1. The API responds with the updated video JSON containing the thumbnail URL.
+	// 2. Frontend JavaScript receives the response and sets the URL as the src attribute of an <img> element.
+	// 3. The browser detects the image source and automatically sends an HTTP GET request to that URL.
+	// 4. The file server in main.go reads and streams the file from disk in chunks; the browser renders and caches the image as a result of the cacheMiddleware wrapper (see main.go).
 	respondWithJSON(w, http.StatusOK, video)
 }
