@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -88,8 +90,16 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	fileExtension := mediaTypeParts[1]
 
-	fileName := fmt.Sprintf("%s.%s", video.ID, fileExtension)
-	fileOnDiskPath := filepath.Join(cfg.assetsRoot, fileName)
+	fileNameBytes := make([]byte, 32)
+	_, err = rand.Read(fileNameBytes)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong", err)
+		return
+	}
+	fileName := base64.RawURLEncoding.EncodeToString(fileNameBytes) // URL-compatible base64 format
+
+	fullFileName := fmt.Sprintf("%s.%s", fileName, fileExtension)
+	fileOnDiskPath := filepath.Join(cfg.assetsRoot, fullFileName)
 	fileOnDisk, err := os.Create(fileOnDiskPath)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong", err)
@@ -103,7 +113,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	tnURL := fmt.Sprintf("http://localhost:%s/assets/%s", cfg.port, fileName)
+	tnURL := fmt.Sprintf("http://localhost:%s/assets/%s", cfg.port, fullFileName)
 	video.ThumbnailURL = &tnURL // Not every video has a thumbnail, therefore can be NULL in db, strings nil value is "" but that could count as a URL, so we use *string which can definitely be nil.
 
 	// Update the video record in the database.
