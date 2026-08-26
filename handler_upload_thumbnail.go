@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -69,19 +70,23 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	defer file.Close()
 
-	cTypeVal := headers.Header.Get("Content-Type")
-	if cTypeVal == "" { // Ensures the client specified a content type for the file, we need this for our new file and thumbnail URL
+	mediaType, _, err := mime.ParseMediaType(headers.Header.Get("Content-Type")) // Media type = MIME type, content-type val = mime type + params (like charset)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid content type", nil)
+		return
+	}
+	if mediaType != "image/jpeg" && mediaType != "image/png" {
 		respondWithError(w, http.StatusBadRequest, "Invalid content type", nil)
 		return
 	}
 
-	// Split content type value into parts so we can grab the file extension i.e. image/png -> png
-	cTypeValParts := strings.Split(cTypeVal, "/")
-	if len(cTypeValParts) != 2 {
+	// Split mediaType into parts so we can grab the file extension e.g. image/png -> png
+	mediaTypeParts := strings.Split(mediaType, "/")
+	if len(mediaTypeParts) != 2 {
 		respondWithError(w, http.StatusBadRequest, "Invalid content type", nil)
 		return
 	}
-	fileExtension := cTypeValParts[1]
+	fileExtension := mediaTypeParts[1]
 
 	fileName := fmt.Sprintf("%s.%s", video.ID, fileExtension)
 	fileOnDiskPath := filepath.Join(cfg.assetsRoot, fileName)
