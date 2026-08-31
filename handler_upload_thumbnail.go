@@ -48,7 +48,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if userID != video.UserID {
-		respondWithError(w, http.StatusForbidden, "Forbidden", nil)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", nil)
 		return
 	}
 
@@ -59,6 +59,9 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	// Operation is equivalent to 10 * 2^20.
 	const maxMemory = 10 << 20
 
+	// Note this does not impose a max upload limit - spillover goes to temp disk
+	// It is also not strictly required since FormFile parses the form implicitly
+	// It does however give us an explicit spill-to-disk threshold
 	err = r.ParseMultipartForm(maxMemory)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Unable to parse form", err)

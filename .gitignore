@@ -61,3 +61,21 @@ out
 *.db
 assets/
 samples/
+
+# Extra general credential safeguards (may or may not be applicable but good to have)
+# AWS CLI credentials if accidentally copied into this project
+.aws/
+
+# Environment-specific local configuration files; unlike .env, this matches variants such as .env.local
+.env.*
+
+# Private keys and certificates
+*.pem
+
+# Local Terraform state files, which may contain secrets
+*.tfstate
+*.tfstate.*
+
+# Terraform variable files that may contain credentials
+*.tfvars
+*.tfvars.json
