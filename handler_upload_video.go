@@ -113,9 +113,27 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	hexFileName := hex.EncodeToString(fileNameBytes)
 	fullFileName := hexFileName + ".mp4"
 
+	aspectRatio, err := getVideoAspectRatio(tempFile.Name()) // Name returns the path used to create the temporary file.
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to process video", err)
+		return
+	}
+
+	prefix := ""
+	switch aspectRatio {
+	case "9:16":
+		prefix = "portrait"
+	case "16:9":
+		prefix = "landscape"
+	default:
+		prefix = "other"
+	}
+
+	key := prefix + "/" + fullFileName
+
 	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
-		Key:         &fullFileName,
+		Key:         &key,
 		Body:        tempFile, // *os.File implements Read method, thus satisfies io.Reader interface
 		ContentType: &mediaType,
 	})
@@ -125,7 +143,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	// S3 URLs are in the format: https://<bucket-name>.s3.<region>.amazonaws. com/<key>
-	s3VideoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, fullFileName)
+	s3VideoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, key)
 	video.VideoURL = &s3VideoURL
 
 	err = cfg.db.UpdateVideo(video)
@@ -133,7 +151,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		// We delete the orphaned object because we don't want it there if we failed to update our db record metadata
 		_, deleteErr := cfg.s3Client.DeleteObject(r.Context(), &s3.DeleteObjectInput{
 			Bucket: &cfg.s3Bucket,
-			Key:    &fullFileName,
+			Key:    &key,
 		})
 		// Attempt best-effort cleanup while preserving the database error.
 		if deleteErr != nil {
