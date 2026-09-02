@@ -104,6 +104,20 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	processedVideoPath, err := processVideoForFastStart(tempFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to process video", err)
+		return
+	}
+	defer os.Remove(processedVideoPath)
+
+	processedVideoFile, err := os.Open(processedVideoPath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to process video", err)
+		return
+	}
+	defer processedVideoFile.Close()
+
 	fileNameBytes := make([]byte, 32)
 	_, err = rand.Read(fileNameBytes)
 	if err != nil {
@@ -113,7 +127,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	hexFileName := hex.EncodeToString(fileNameBytes)
 	fullFileName := hexFileName + ".mp4"
 
-	aspectRatio, err := getVideoAspectRatio(tempFile.Name()) // Name returns the path used to create the temporary file.
+	aspectRatio, err := getVideoAspectRatio(processedVideoFile.Name()) // Name returns the file path.
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Failed to process video", err)
 		return
@@ -134,7 +148,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
 		Key:         &key,
-		Body:        tempFile, // *os.File implements Read method, thus satisfies io.Reader interface
+		Body:        processedVideoFile, // *os.File implements Read method, thus satisfies io.Reader interface
 		ContentType: &mediaType,
 	})
 	if err != nil {

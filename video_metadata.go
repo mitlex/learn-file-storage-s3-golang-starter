@@ -12,6 +12,22 @@ import (
 // Returns: aspect ratio of the video at the filepath as a string, error
 // If error, return empty string and error
 func getVideoAspectRatio(filepath string) (string, error) {
+	// ffprobe -v error -print_format json -show_streams <filepath>
+	//
+	// What it does:
+	// Inspects a media file and extracts detailed metadata about all of its streams
+	// (such as video dimensions, audio codecs, frame rates, etc.) and outputs
+	// the information in JSON format.
+	//
+	// Arguments breakdown:
+	// -v error             : Sets the log level to "error". Suppresses standard informational
+	//                        banners and warnings so only actual errors (and requested data)
+	//                        are produced.
+	// -print_format json   : Formats the command's output as valid JSON instead of
+	//                        the default plain-text format, making it easy to parse in code.
+	// -show_streams        : Tells ffprobe to return stream-level information (video, audio,
+	//                        subtitles, etc.) found within the media container.
+	// <filepath>           : The path to the media file being inspected.
 	cmd := exec.Command("ffprobe", "-v", "error", "-print_format", "json", "-show_streams", filepath) // configure the command (does not run yet)
 	cmdOutput := bytes.Buffer{}                                                                       // create bytes buffer for command output
 	cmd.Stdout = &cmdOutput                                                                           // direct the command's stdout into the buffer
