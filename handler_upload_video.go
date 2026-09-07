@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"mime"
@@ -156,9 +155,12 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// S3 URLs are in the format: https://<bucket-name>.s3.<region>.amazonaws. com/<key>
-	s3VideoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, key)
-	video.VideoURL = &s3VideoURL
+	// We need presigned URLs to access videos in our private bucket
+	// No point putting pre-signed URLs in the database since they will expire quickly
+	// Instead we'll store the bucket name and object key with a comma delimiter
+	// and use that to generate a presigned URL on the fly and respond with it on the API
+	bucketAndKey := cfg.s3Bucket + "," + key
+	video.VideoURL = &bucketAndKey
 
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
@@ -175,5 +177,12 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, video)
+	// Sign the video URL to give access to the video via S3 URL for a limited time
+	signedVideo, err := cfg.dbVideoToSignedVideo(video)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to sign video URL", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, signedVideo)
 }
