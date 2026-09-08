@@ -1,65 +1,93 @@
-# learn-file-storage-s3-golang-starter (Tubely)
+# File Hosting and CDN Infrastructure with AWS
 
-This repo contains the starter code for the Tubely application - the #1 tool for engagement bait - for the "Learn File Servers and CDNs with S3 and CloudFront" [course](https://www.boot.dev/courses/learn-file-servers-s3-cloudfront-golang) on [boot.dev](https://www.boot.dev)
+Coursework exploring static file hosting, content delivery networks, access control, caching, and cloud infrastructure fundamentals using Amazon S3, CloudFront, and IAM.
 
-## Quickstart
+> **Note:** This repository is a fork of the project repository used in Boot.dev's *Learn File Servers and CDNs with S3 and CloudFront* course. The work here was completed as guided coursework.
 
-*This is to be used as a *reference\* in case you need it, you should follow the instructions in the course rather than trying to do everything here.
+## Overview
 
-## 1. Install dependencies
+This project focused on the architecture behind serving static files reliably at scale:
 
-- [Go](https://golang.org/doc/install)
-- `go mod download` to download all dependencies
-- [FFMPEG](https://ffmpeg.org/download.html) - both `ffmpeg` and `ffprobe` are required to be in your `PATH`.
-
-```bash
-# linux
-sudo apt update
-sudo apt install ffmpeg
-
-# mac
-brew update
-brew install ffmpeg
+```text
+Client → CloudFront CDN → Amazon S3 Origin
 ```
 
-- [SQLite 3](https://www.sqlite.org/download.html) only required for you to manually inspect the database.
+Amazon S3 provides durable object storage for static assets, while CloudFront distributes cached copies through edge locations closer to users. IAM policies, users, groups, and roles control access to AWS resources.
 
-```bash
-# linux
-sudo apt update
-sudo apt install sqlite3
+## Learning Outcomes
 
-# mac
-brew update
-brew install sqlite3
+- **Object Storage with Amazon S3**
+  - Created and managed S3 buckets and stored static objects.
+  - Worked with object keys, bucket-level configuration, and file accessibility.
+  - Explored the distinction between storage origins and public delivery endpoints.
+
+- **Identity and Access Management**
+  - Created IAM users, groups, roles, access keys, and custom policies.
+  - Applied least-privilege access principles to AWS resources.
+  - Used identity-based policies to define permissions for IAM users and roles, and resource-based bucket policies to control access to S3 resources.
+
+- **Content Delivery with CloudFront**
+  - Created a CloudFront distribution backed by an S3 origin.
+  - Served static files through a CDN rather than directly from object storage.
+  - Explored edge caching, cache invalidation, and origin requests.
+
+- **Web Delivery and Caching**
+  - Examined how HTTP caching affects static asset delivery.
+  - Learned how CDNs reduce latency and decrease load on origin infrastructure.
+  - Investigated cache-control behavior and the tradeoff between freshness and performance.
+
+- **Cloud Infrastructure Lifecycle**
+  - Practiced provisioning and removing cloud resources.
+  - Considered the cost and security implications of unused AWS infrastructure.
+  - Learned the dependency order involved in disabling and deleting cloud resources.
+
+## Implementation Highlights
+
+- Generated S3 object keys and CloudFront URLs for uploaded video assets.
+- Created temporary local files before uploading objects with the Go AWS SDK.
+- Persisted uploaded asset metadata and delivery URLs in the application database.
+- Separated object storage concerns from application data, storing references rather than file contents in PostgreSQL.
+- Used CloudFront as the public delivery layer while S3 remained the origin.
+
+## Technologies
+
+| Technology | Purpose |
+|---|---|
+| Go | Course language and tooling |
+| Amazon S3 | Static object storage and origin hosting |
+| Amazon CloudFront | CDN and edge caching |
+| AWS IAM | Access control through users, groups, roles, and policies |
+| AWS CLI | AWS resource management and inspection |
+| Git | Version control |
+
+## Key Concepts
+
+### Origin Storage vs. CDN Delivery
+
+S3 stores the source files. CloudFront acts as a caching layer between the client and S3, serving content from geographically distributed edge locations when possible.
+
+```text
+First request:
+Client → CloudFront → S3
+
+Later cached requests:
+Client → CloudFront edge cache
 ```
 
-- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+### Least-Privilege Access
 
-## 2. Download sample images and videos
+IAM policies should grant only the actions and resources required for a task. This reduces the potential impact of leaked credentials or incorrectly configured applications.
 
-```bash
-./samplesdownload.sh
-# samples/ dir will be created
-# with sample images and videos
-```
+### Cache Invalidation
 
-## 3. Configure environment variables
+CDNs improve performance by retaining copies of files. When a file changes, cached versions may need to expire naturally, use versioned filenames, or be explicitly invalidated.
 
-Copy the `.env.example` file to `.env` and fill in the values.
+## Repository Context
 
-```bash
-cp .env.example .env
-```
+This is not intended to be a standalone production application. It documents hands-on AWS infrastructure work completed through Boot.dev coursework, including the AWS configuration and resource-management concepts practiced throughout the course.
 
-You'll need to update values in the `.env` file to match your configuration, but _you won't need to do anything here until the course tells you to_.
+## Acknowledgments
 
-## 3. Run the server
+Built as part of Boot.dev's [Back-End Development Path](https://www.boot.dev/tracks/backend), specifically the [Learn File Servers and CDNs with S3 and CloudFront](https://www.boot.dev/courses/learn-file-servers-s3-cloudfront-golang) course.
 
-```bash
-go run .
-```
-
-- You should see a new database file `tubely.db` created in the root directory.
-- You should see a new `assets` directory created in the root directory, this is where the images will be stored.
-- You should see a link in your console to open the local web page.
+The original repository and course material belong to Boot.dev. This fork contains my completed coursework and documentation.
